@@ -1,12 +1,25 @@
 [package]
-name = "kernel"
+name = "batmetal"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.88"
+
+[profile.dev]
+panic = "abort"
+opt-level = "s"
 
 [profile.release]
 panic = "abort"
 lto = true
 codegen-units = 1
 
+[features]
+default = []
+stepper-test = []
+stepper-scan = []
+
 [dependencies]
+embedded-hal = "1.0"
+esp-hal = { version = "=1.0.0", features = ["esp32c6", "unstable"] }
+esp-println = { version = "=0.16.1", default-features = false, features = ["esp32c6", "uart", "critical-section"] }
+esp-bootloader-esp-idf = { version = "=0.4.0", features = ["esp32c6"] }

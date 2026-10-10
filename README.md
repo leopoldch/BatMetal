@@ -1,89 +1,49 @@
 # BatMetal
-**Bare Metal Kernel for Raspberry Pi 5 Sonar Mapping**
 
-BatMetal is a lightweight, Rust-based bare metal kernel designed for the **Raspberry Pi 5**. Its primary mission is to provide a real-time, low-latency platform for ultrasonic sonar mapping operations, bypassing the overhead of a traditional operating system.
+BatMetal is a low-cost sonar mapping prototype built around an ESP32-C6. Its goal
+is to turn ultrasonic distance readings into a map of nearby obstacles.
 
-Currently, it serves as a robust hardware abstraction layer verifying RP1 (Southbridge) access, UART communication, and GPIO control.
+The current prototype measures with an HC-SR04, shows the latest distance on an
+LCD1602, and streams JSON records over serial. The trigger interval is at least
+65 ms, for a sensor-limited ceiling of about 15 samples per second; echo and
+display processing reduce the actual rate. A distance
+becomes a map point only when its sensor position and direction are known; this
+version does not yet build or display a map automatically.
 
----
+The HC-SR04's nominal range is **2 cm to 4 m**. The firmware accepts readings in
+that interval, times out after 30 ms, and leaves over 60 ms between triggers as
+recommended by the sensor datasheet. The advertised range is a best-case
+specification: target shape, angle, material, and surroundings affect detection.
+[HC-SR04 specifications](https://www.sparkfun.com/ultrasonic-distance-sensor-hc-sr04.html).
 
-## Hardware Configuration
+## Hardware
 
-### Pinout & GPIOs
-| GPIO Pin | Function | Description |
-| :--- | :--- | :--- |
-| **GPIO 14** | UART0 TX | Serial Console Transmit (Connected to Adapter RX) |
-| **GPIO 15** | UART0 RX | Serial Console Receive (Connected to Adapter TX) |
-| **GPIO 18** | SERVO PWM | 9g Servo Motor Control (50Hz Software PWM) |
-| **GPIO 6** | `ALIVE_LED` | Alive Status Indicator (Blinks during normal operation) |
-| **GPIO 5** | `ERROR_LED` | Panic/Error Indicator (Blinked by Panic Handler) |
-| **ACT LED** | Onboard | Activity LED (Green) - Used for Boot/Panic status |
+- ESP32-C6-DevKitC-1-N8
+- HC-SR04 ultrasonic sensor
+- LCD1602 with PCF8574T I²C backpack at address `0x27`
+- Breadboard, two LEDs, and current-limiting/divider resistors
 
-### Memory Map (Crucial for Pi 5)
-The Raspberry Pi 5 uses a split architecture with the **RP1 I/O Controller** connected via PCIe.
-*   **RP1 Base Address (CPU View):** `0x1f00000000` (BAR0)
-*   **UART0 Offset:** `0x30000`
-*   *Note:* The Firmware initializes UART0 at `0x1c...`, but the Kernel must access it via the PCIe BAR0 mapping at `0x1f...`.
+See the [wiring guide](docs/wiring-guide.md) and [diagram](docs/wiring-esp32-c6.png).
+The sonar and LCD use the board's 5 V supply. The sonar ECHO divider protects
+the ESP32 input. Keep LCD SDA/SCL pull-ups at or below 3.3 V.
 
----
+## Build and run
 
-## Getting Started
+Install the Rust toolchain and `espflash`, then run:
 
-### Prerequisites
-*   **Rust Toolchain** (Nightly recommended for `no_std`)
-*   **Cross-Compiler Tools:** `aarch64-linux-gnu-binutils` (for `objcopy`)
-*   **Hardware:** Raspberry Pi 5, USB-to-UART Adapter (3.3V logic)
+```sh
+make check
+make flash PORT=/dev/ttyUSB0
+```
 
-### Build Instructions
+Use the board's USB-to-UART port to read the 115200-baud console. Valid samples
+look like:
 
-1.  **Install Target:**
-    ```bash
-    rustup target add aarch64-unknown-none
-    ```
+```json
+{"sample":12,"echo_us":2478,"distance_mm":425}
+```
 
-2.  **Compile & Link:**
-    ```bash
-    make
-    ```
-    This produces `kernel8.img`.
-
-3.  **Flash:**
-    *   Format an SD card with FAT32.
-    *   Copy standard Pi 5 boot files (`bcm2712-rpi-5-b.dtb`, `config.txt`, etc.).
-    *   Copy `kernel8.img` to the root.
-    *   Ensure `config.txt` contains:
-        ```ini
-        os_prefix=
-        check_syslin_rom=0
-        enable_uart=1
-        ```
-
-4.  **Run:**
-    Connect UART adapter and power on.
-    ```bash
-    sudo minicom -D /dev/ttyUSB0 -b 115200
-    ```
-
----
-
-## Roadmap: Project "Sonar"
-
-The ultimate goal of BatMetal is **Autonomous Sonar Mapping**.
-Future implementations will include:
-
-*   [ ] **HC-SR04 Driver:** Precise microsecond timing for ultrasonic triggering and echo measurement.
-*   [x] **Servo Control:** PWM generation to sweep the sonar sensor (Radar style).
-*   [ ] **Point Cloud Storage:** In-memory mapping of detected obstacles.
-*   [ ] **Visualization:** Exporting polar coordinate data via UART for external rendering.
-
----
-
-## 🛠 Tech Stack
-*   **Language:** Rust 🦀
-*   **Architecture:** AArch64 (ARM64)
-*   **Platform:** Raspberry Pi 5 (BCM2712 + RP1)
-*   **Approach:** Bare Metal (No OS)
-
----
-
-> *"In the silence of bare metal, every echo counts."*
+Failed readings include `"distance_mm":null` and an `error` field. Startup and
+status messages also use the console; measurement records are the lines beginning
+with `{`. Use known sensor angles to place the samples in a 2D map. Manual
+positioning is required with the current hardware.

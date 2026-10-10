@@ -1,39 +1,17 @@
-//! UART0 Module for RP1
-//! Target Baud: 115200
+//! UART0 console routed to the DevKitC-1 USB-to-UART bridge.
 
-use crate::rp1::{UART0_BASE, UART_DR, UART_FR, FR_TXFF, memory_barrier};
-use core::ptr::{read_volatile, write_volatile};
+use esp_hal::{
+    peripherals::{GPIO16, GPIO17, UART0},
+    uart::{Config, ConfigError, Uart},
+    Blocking,
+};
 
-
-pub fn init() {
-    // We assume Firmware has already set up:
-    // - GPIO 14/15 ALT Function (UART0)
-    // - Clocks
-    // - Baud Rate (115200)
-    // We just start writing!
-}
-
-pub fn putc(c: char) {
-    unsafe {
-        // Wait while TX FIFO is Full
-        let fr_reg = (UART0_BASE + UART_FR) as *const u32;
-        while (read_volatile(fr_reg) & FR_TXFF) != 0 {
-            core::hint::spin_loop();
-        }
-
-        // Write Character to Data Register
-        let dr_reg = (UART0_BASE + UART_DR) as *mut u32;
-        write_volatile(dr_reg, c as u32);
-        
-        memory_barrier();
-    }
-}
-
-pub fn puts(s: &str) {
-    for c in s.chars() {
-        putc(c);
-        if c == '\n' {
-            putc('\r');
-        }
-    }
+pub fn init<'a>(
+    uart: UART0<'a>,
+    tx: GPIO16<'a>,
+    rx: GPIO17<'a>,
+) -> Result<Uart<'a, Blocking>, ConfigError> {
+    Ok(Uart::new(uart, Config::default().with_baudrate(115_200))?
+        .with_tx(tx)
+        .with_rx(rx))
 }

@@ -1,20 +1,30 @@
-KERNEL_NAME = kernel
-TARGET = aarch64-unknown-none
-IMG = kernel8.img
-OBJCOPY = aarch64-linux-gnu-objcopy
+TARGET = riscv32imac-unknown-none-elf
+ELF = target/$(TARGET)/release/batmetal
+PORT ?=
+PORT_ARG = $(if $(PORT),--port $(PORT),)
+ESPFLASH ?= espflash
+FEATURES ?=
+FEATURE_ARGS = $(if $(FEATURES),--features $(FEATURES),)
 
-.PHONY: all clean build img
+.PHONY: all build check flash monitor image clean
 
-all: img
+all: build
 
 build:
-	RUSTFLAGS="-C link-arg=-Tlink.ld" cargo build --release --target $(TARGET)
+	cargo build --release --locked $(FEATURE_ARGS)
 
-img: build
-	$(OBJCOPY) -O binary target/$(TARGET)/release/$(KERNEL_NAME) $(IMG)
-	@echo "Kernel size:"
-	@ls -lh $(IMG)
+check:
+	cargo fmt --check
+	cargo clippy --locked $(FEATURE_ARGS) -- -D warnings
+
+flash: build
+	$(ESPFLASH) flash --chip esp32c6 --flash-size 8mb $(PORT_ARG) --monitor $(ELF)
+
+monitor:
+	$(ESPFLASH) monitor $(PORT_ARG) --monitor-baud 115200
+
+image: build
+	$(ESPFLASH) save-image --chip esp32c6 --flash-size 8mb --merge $(ELF) batmetal.bin
 
 clean:
 	cargo clean
-	rm -f $(IMG)

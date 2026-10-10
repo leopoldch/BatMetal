@@ -1,8 +1,10 @@
 [build]
-target = "aarch64-unknown-none"
+target = "riscv32imac-unknown-none-elf"
 
-[target.aarch64-unknown-none]
-rustflags = [
-    "-C", "link-arg=-Tlink.ld",
-]
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --monitor --chip esp32c6 --flash-size 8mb"
+rustflags = ["-C", "link-arg=-Tlinkall.x"]
 linker = "rust-lld"
+
+[resolver]
+incompatible-rust-versions = "fallback"
